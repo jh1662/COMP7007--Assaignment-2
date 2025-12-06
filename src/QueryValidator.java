@@ -1,4 +1,4 @@
-import java.time.LocalDateTime;
+import java.time.ZonedDateTime;
 
 public class QueryValidator {
 
@@ -14,10 +14,10 @@ public class QueryValidator {
     private void radius(int km) {
 
     }
-    private void validateStartDateTime(LocalDateTime start) {
+    private void validateStartDateTime(ZonedDateTime start) {
 
     }
-    private void validateEndDateTime(LocalDateTime end) {
+    private void validateEndDateTime(ZonedDateTime end) {
 
     }
     private void validateLowestMagnitude(double lowestMagnitude) {

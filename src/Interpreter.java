@@ -26,6 +26,10 @@ public class Interpreter implements ClientActions {
 
     }
     @Override
+    public void viewRawDataSet() {
+
+    }
+    @Override
     public void exportAllReports() {
 
     }

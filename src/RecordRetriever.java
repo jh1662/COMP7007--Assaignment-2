@@ -1,4 +1,4 @@
-import java.time.LocalDateTime;
+import java.time.ZonedDateTime;
 
 public class RecordRetriever {
     //! API doc at - https://earthquake.usgs.gov/fdsnws/event/1/
@@ -22,13 +22,13 @@ public class RecordRetriever {
 
     //! No constructor to enforce singleton pattern.
 
-    public EarthquakeEntry[] requestAPIDataRecord(int limit, double latitude, double longitude, int radiusKM, LocalDateTime startTimeDate, LocalDateTime endTimeDate, double lowestMagnitude, double highestMagnitude) {
+    public EarthquakeEntry[] requestAPIDataRecord(int limit, double latitude, double longitude, int radiusKM, ZonedDateTime startTimeDate, ZonedDateTime endTimeDate, double lowestMagnitude, double highestMagnitude) {
         //* KM radius is a very precise unit but earthquakes are not precise, thus integer are sufficient.
         return new EarthquakeEntry[]{};
     }
 
     //: Helper methods for 'requestAPIDataRecord' method.
-    private boolean isQueryValid(int limit, double latitude, double longitude, int radiusKM, LocalDateTime startTimeDate, LocalDateTime endTimeDate, double lowestMagnitude, double highestMagnitude) {
+    private boolean isQueryValid(int limit, double latitude, double longitude, int radiusKM, ZonedDateTime startTimeDate, ZonedDateTime endTimeDate, double lowestMagnitude, double highestMagnitude) {
         return true;
     }
     private boolean checkVersion() {
