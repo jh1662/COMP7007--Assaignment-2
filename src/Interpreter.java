@@ -1,7 +1,11 @@
 import java.util.ArrayList;
+import java.util.Scanner;
 
 public class Interpreter implements ClientActions {
-    private final RecordRetriever recordRetriever = new RecordRetriever();
+
+    HTTPRetriever retriever = HTTPRetriever.getInstance();
+    JSONToRecord converter = JSONToRecord.getInstance();
+
     private final ArrayList<EarthquakeReport> reports = new ArrayList<>();
     private EarthquakeEntry[] currentDataSet = null;
 
@@ -13,9 +17,10 @@ public class Interpreter implements ClientActions {
         return true;
     }
 
-    private void processInputs(){
+    private void processInputs(QueryParam expectedInput) {
 
     }
+
 
     @Override
     public void submitQuery() {

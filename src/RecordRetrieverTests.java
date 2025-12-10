@@ -1,10 +1,11 @@
 import org.junit.jupiter.api.*;
+import org.junit.jupiter.params.shadow.com.univocity.parsers.annotations.Nested;
 
 class RecordRetrieverTests {
 
     @BeforeEach
     void setUp() {
-        RecordRetriever retriever = new RecordRetriever();
+        HTTPRetriever retriever = new HTTPRetriever();
     }
 
     @AfterEach

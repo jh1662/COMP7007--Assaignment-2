@@ -3,6 +3,22 @@ import java.time.ZonedDateTime;
 import java.util.Arrays;
 import java.util.stream.IntStream;
 
+/**
+ * Record class representing an earthquake report.
+ * Immutable data structure holding processed earthquake statistics and predictions based of data set of earthquake entries ('EarthquakeEntry[]').
+ * <p>
+ * Unlike 'EarthquakeEntry', this record is not directly instantiated via its canonical constructor.
+ * A static factory method is used instead to allow pre-processing of the data set before instantiation.
+ * This allows calculated fields to be derived from the data set without supplying them directly.
+ * @param dataSet The raw earthquake data set (of earthquake entries).
+ * @param magnitudeQuartiles The magnitude quartiles (Q1, Q2, and Q3).
+ * @param meanMagnitude The mean magnitude.
+ * @param meanDepth The mean depth.
+ * @param meanIntermissionTimeHours The mean intermission time (in hours).
+ * @param monthlyFrequency The monthly frequency (in days).
+ * @param centroidCoords The centroid coordinates (latitude and longitude).
+ * @param predictedNextTime The predicted next earthquake occurrence time range.
+ */
 public record EarthquakeReport(
     EarthquakeEntry[] dataSet,
     //^ Raw earthquake data.
@@ -17,7 +33,17 @@ public record EarthquakeReport(
     /*double predictedNextMagnitude, double[] predictedNextCoordinates,*/ ZonedDateTime[] predictedNextTime
     //^ Predictions.
 ) {
-
+    /**
+     * Static factory method to create an 'EarthquakeReport' instance.
+     * Processes given earthquake data set to calculate necessary statistics and predictions.
+     * <p>
+     * Is used instead of canonical constructor to allow pre-processing before instantiation.
+     * @param dataSet The earthquake data set (of earthquake entries) to process.
+     * @param startTime The start time of the data set retrieval period.
+     * @param endTime The end time of the data set retrieval period.
+     * @return A new 'EarthquakeReport' instance with calculated statistics and predictions.
+     * @throws IllegalArgumentException if the provided data set is empty.
+     */
     public static EarthquakeReport of(EarthquakeEntry[] dataSet, ZonedDateTime startTime, ZonedDateTime endTime) {
         //^ Canonical constructor forbids logic before 'this(' call, thus static factory method is used instead.
 
@@ -31,7 +57,7 @@ public record EarthquakeReport(
         double meanIntermissionTimeHours = EarthquakeReport.findMeanIntermissionDurationHours(dataSet);
 
 
-        //: Also local processing (of the data set) but requires prior local processing results as args.
+        //: Also local processing (of the data set) but requires other args as well.
         double monthlyFrequency = EarthquakeReport.findMonthlyFrequency(dataSet, startTime,endTime);
         ZonedDateTime[] nextTimeRange = EarthquakeReport.predictNextTime(dataSet, monthlyFrequency, meanIntermissionTimeHours);
 
@@ -48,6 +74,11 @@ public record EarthquakeReport(
     //! Because helper most helper methods are called before record's instantiation, they must be static.
 
     //: Averages
+    /**
+     * Locally processes (using stream) to find the mean magnitude.
+     * @param dataSet The earthquake data set (of earthquake entries) to process.
+     * @return The mean magnitude as a double.
+     */
     private static double findMeanMagnitude(EarthquakeEntry[] dataSet){
         if (dataSet.length == 1) return dataSet[0].magnitude();
         //^ Mean of one value is itself - shortcut to avoid stream overhead.
@@ -66,6 +97,11 @@ public record EarthquakeReport(
         return 0.0;
     }
     */
+    /**
+     * Locally processes (using stream) to find the magnitude quartiles (Q1, Q2, and Q3).
+     * @param dataSet The earthquake data set (of earthquake entries) to process.
+     * @return The quartiles as a double array - obviously structured as {Q1, Q2, Q3} (ascending order).
+     */
     private static double[] findQuartilesMagnitude(EarthquakeEntry[] dataSet){
         //* includes Q1, Q2 (median), and Q3
 
@@ -132,12 +168,20 @@ public record EarthquakeReport(
         };
 
     }
+    /**
+     * Locally processes (using stream) to find the centroid coordinates (latitude and longitude).
+     * @param dataSet The earthquake data set (of earthquake entries) to process.
+     * @return The centroid coordinates as a double array - structured as {latitude, longitude} as industry standard (North then East).
+     */
     private static double[] findCentroidCoords(EarthquakeEntry[] dataSet){
         //* includes latitude and longitude
         if (dataSet.length == 1) return new double[]{dataSet[0].latitude(), dataSet[0].longitude()};
 
         return new double[]{
             //* Each element calculation is done the same way to the stream used in 'this.findMeanMagnitude' method.
+            //* Ordered as {latitude, longitude} as per both industry standard and commonly presented as.
+            //* Sources for standard - https://www.movable-type.co.uk/scripts/latlong.html and
+            //* https://simonwrigley.medium.com/lat-lon-or-lon-lat-8adaf6441ccd .
             Arrays.stream(dataSet)
                 //* Finding mean latitude.
                 .mapToDouble(EarthquakeEntry::latitude)
@@ -151,6 +195,13 @@ public record EarthquakeReport(
                 .getAsDouble()
         };
     }
+    /**
+     * Locally processes (using stream) to find the mean intermission duration (in hours).
+     * <p>
+     * User wouldn't realistically care about minutes, seconds, or shorter scales in intermission time.
+     * @param dataSet The earthquake data set (of earthquake entries) to process.
+     * @return The mean intermission duration as a double (in hours).
+     */
     private static double findMeanIntermissionDurationHours(EarthquakeEntry[] dataSet){
         //* User wouldn't realistically care about minutes or seconds in intermission time.
         if (dataSet.length == 1) { return 0; }
@@ -179,6 +230,11 @@ public record EarthquakeReport(
             .orElseThrow();
             //^ Assure result is an existing decimal - converting 'OptionalDouble' to 'double'.
     }
+    /**
+     * Locally processes (using stream) to find the mean depth.
+     * @param dataSet The earthquake data set (of earthquake entries) to process.
+     * @return The mean depth as a double (in kilometers).
+     */
     private static double findMeanDepth(EarthquakeEntry[] dataSet){
         if (dataSet.length == 1) return dataSet[0].depth();
         //^ Mean of one value is itself - shortcut to avoid stream overhead.
@@ -192,6 +248,13 @@ public record EarthquakeReport(
             .getAsDouble();
             //^ Assure result is an existing decimal - converting 'OptionalDouble' to 'double'.
     }
+    /**
+     * Locally processes (using stream) to find the monthly frequency (in days).
+     * @param dataSet The earthquake data set (of earthquake entries) to process.
+     * @param startTime The start time of the data set retrieval period.
+     * @param endTime The end time of the data set retrieval period.
+     * @return The monthly frequency as a double (in days).
+     */
     private static double findMonthlyFrequency(EarthquakeEntry[] dataSet, ZonedDateTime startTime, ZonedDateTime endTime){
         int occurrences = dataSet.length;
         int durationDays = (int) Duration.between(startTime, endTime).toDays();
@@ -224,6 +287,17 @@ public record EarthquakeReport(
         return new double[]{0.0,0.0};
     }
     */
+    /**
+     * Locally processes (using stream) to predict the next earthquake occurrence time range.
+     * <p>
+     * Requires previously calculated stats (monthly frequency and mean intermission duration) to calculate.
+     * <p>
+     * Predicting timestamps is very imprecise, thus a range is given instead of a single timestamp.
+     * @param dataSet The earthquake data set (of earthquake entries) to process.
+     * @param monthlyFrequency The monthly frequency (in days) previously calculated.
+     * @param meanIntermissionDurationHours The mean intermission duration (in hours) previously calculated.
+     * @return The predicted next occurrence time range as a 'ZonedDateTime' array - structured as {earliest, latest}.
+     */
     private static ZonedDateTime[] predictNextTime(EarthquakeEntry[] dataSet, double monthlyFrequency, double meanIntermissionDurationHours){
         //* Time is a much harder prediction to make, due to its nature, thus a prediction range is calculated instead.
         //* As mentioned in 'this.findMeanIntermissionDurationHours', time prediction uses hours.
@@ -249,6 +323,11 @@ public record EarthquakeReport(
     }
 
     //: String representation rendering methods
+    /**
+     * Overrides default 'toString' method.
+     * Provides a formatted earthquake report as a text representation.
+     * @return The formatted earthquake report as a string representation.
+     */
     @Override
     public String toString() {
         StringBuilder report = new StringBuilder("Earthquake report:\n");
@@ -277,6 +356,13 @@ public record EarthquakeReport(
 
         return report.toString();
     }
+    /**
+     * Renders the raw earthquake data set as a text representation.
+     * Calls '.toString()' method of each 'EarthquakeEntry' in the data set.
+     * <p>
+     * Kept separate from 'this.toString' method for clarity.
+     * @return The raw earthquake data set (all entries) as a string representation.
+     */
     public String renderRawDataSet(){
         StringBuilder rawDataSet = new StringBuilder("Earthquake Data Set:\n");
         //^ Using StringBuilder is a better alternative for string concatenation.

@@ -14,7 +14,9 @@ enum QueryParam {
     //^ Same format as 'START_TIME'.
     //^ Must not exceed current data and time.
     LOWEST_MAGNITUDE("minmagnitude="),
-    HIGHEST_MAGNITUDE("maxmagnitude=");
+    HIGHEST_MAGNITUDE("maxmagnitude="),
+    LOWEST_DEPTH("minDepth="),
+    HIGHEST_DEPTH("maxDepth=");
 
     private final String value;
     //^ Holds string representation of the query params.
