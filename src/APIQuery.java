@@ -73,7 +73,7 @@ public record APIQuery(int limit,
      * @return true if magnitude is valid, false otherwise.
      */
     private static boolean magnitudeIsValid(double magnitude) {
-        return (magnitude < -5.0 || magnitude > 10.0);
+        return (magnitude >= -5.0 && magnitude <= 10.0);
     }
     /**
      * Helper validation method.
@@ -84,7 +84,7 @@ public record APIQuery(int limit,
      * @return true if depth is valid, false otherwise.
      */
     private static boolean depthIsValid(double depth) {
-        return (depth < 0 || depth > 800);
+        return (depth > 0 || depth <= 800);
     }
 
     //: Helper validator methods for individual query params.
@@ -127,7 +127,7 @@ public record APIQuery(int limit,
      * @throws IllegalArgumentException if 'start' is in the future (after current time and date) or before 1900AD.
      */
     private static void validateStartTimestamp(ZonedDateTime start) {
-        if (APIQuery.timestampIsValid(start)) throw new IllegalArgumentException(start + " is invalid. Start time cannot be in the future nor before 1900AD.");
+        if (!APIQuery.timestampIsValid(start)) throw new IllegalArgumentException(start + " is invalid. Start time cannot be in the future nor before 1900AD.");
     }
     /**
      * Validates arg for end timestamp field.
@@ -138,7 +138,7 @@ public record APIQuery(int limit,
      * @throws IllegalArgumentException if 'end' is in the future (after current time and date), before 1900AD, or before 'start' time.
      */
     private static void validateEndTimestamp(ZonedDateTime end, ZonedDateTime start) {
-        if (APIQuery.timestampIsValid(start)) throw new IllegalArgumentException(end + " is invalid. End time cannot be in the future nor before 1900AD.");
+        if (!APIQuery.timestampIsValid(start)) throw new IllegalArgumentException(end + " is invalid. End time cannot be in the future nor before 1900AD.");
         if (end.isBefore(start)) throw new IllegalArgumentException(end + " is invalid. End time cannot be before start time.");
     }
     /**
@@ -149,7 +149,7 @@ public record APIQuery(int limit,
      * @throws IllegalArgumentException if 'lowestMagnitude' is out of bounds.
      */
     private static void validateLowestMagnitude(double lowestMagnitude) {
-        if (APIQuery.magnitudeIsValid(lowestMagnitude)) throw new IllegalArgumentException(lowestMagnitude + " is invalid. Lowest magnitude cannot be more than 10.0 nor less than -5.0.");
+        if (!APIQuery.magnitudeIsValid(lowestMagnitude)) throw new IllegalArgumentException(lowestMagnitude + " is invalid. Lowest magnitude cannot be more than 10.0 nor less than -5.0.");
     }
     /**
      * Validates arg for highest magnitude field.
@@ -160,7 +160,7 @@ public record APIQuery(int limit,
      * @throws IllegalArgumentException if 'highestMagnitude' is out of bounds or less than 'lowestMagnitude'.
      */
     private static void validateHighestMagnitude(double highestMagnitude, double lowestMagnitude) {
-        if (APIQuery.magnitudeIsValid(lowestMagnitude)) throw new IllegalArgumentException(highestMagnitude + " is invalid. Highest magnitude cannot be more than 10.0 nor less than -5.0.");
+        if (!APIQuery.magnitudeIsValid(lowestMagnitude)) throw new IllegalArgumentException(highestMagnitude + " is invalid. Highest magnitude cannot be more than 10.0 nor less than -5.0.");
         if (highestMagnitude < lowestMagnitude) throw new IllegalArgumentException(highestMagnitude + " is invalid. Highest magnitude cannot be less than lowest magnitude.");
     }
     /** Validates arg for lowest depth field.
@@ -170,7 +170,7 @@ public record APIQuery(int limit,
      * @throws IllegalArgumentException if 'lowestDepth' is out of bounds.
      */
     private static void validateLowestDepth(double lowestDepth) {
-        if (APIQuery.depthIsValid(lowestDepth)) throw new IllegalArgumentException(lowestDepth + " is invalid. Lowest depth must be above 0 and below 800 km.");
+        if (!APIQuery.depthIsValid(lowestDepth)) throw new IllegalArgumentException(lowestDepth + " is invalid. Lowest depth must be above 0 and below 800 km.");
     }
     /** Validates arg for highest depth field.
      * Ensures it is within valid bounds (0 to 800 kilometers), and not less than the lowest depth arg.
@@ -180,7 +180,7 @@ public record APIQuery(int limit,
      * @throws IllegalArgumentException if 'highestDepth' is out of bounds or less than 'lowestDepth'.
      */
     private static void validateHighestDepth(double highestDepth, double lowestDepth) {
-        if (APIQuery.depthIsValid(highestDepth)) throw new IllegalArgumentException(highestDepth + " is invalid. Lowest depth must be above 0 and below 800 km.");
+        if (!APIQuery.depthIsValid(highestDepth)) throw new IllegalArgumentException(highestDepth + " is invalid. Lowest depth must be above 0 and below 800 km.");
         if (highestDepth < lowestDepth) throw new IllegalArgumentException(highestDepth + " is invalid. Highest depth cannot be less than lowest depth.");
     }
     /**
@@ -201,6 +201,19 @@ public record APIQuery(int limit,
      */
     @Override
     public String toString() {
+        //: Debugging print statement.
+        System.out.println(APIQuery.baseURL +
+            QueryParam.LIMIT.toString() + this.limit + "&" +
+            QueryParam.LATITUDE.toString() + this.latitude + "&" +
+            QueryParam.LONGITUDE.toString() + this.longitude + "&" +
+            QueryParam.RADIUS_KM.toString() + this.radiusKm + "&" +
+            QueryParam.START_TIME.toString() + this.startTime.toInstant().toString() + "&" +
+            QueryParam.END_TIME.toString() + this.endTime.toInstant().toString() + "&" +
+            QueryParam.LOWEST_MAGNITUDE.toString() + this.lowestMagnitude + "&" +
+            QueryParam.HIGHEST_MAGNITUDE.toString() + this.highestMagnitude + "&" +
+            QueryParam.LOWEST_DEPTH.toString() + this.lowestDepth + "&" +
+            QueryParam.HIGHEST_DEPTH.toString() + this.highestDepth);
+
         return APIQuery.baseURL +
             QueryParam.LIMIT.toString() + this.limit + "&" +
             QueryParam.LATITUDE.toString() + this.latitude + "&" +
@@ -213,4 +226,5 @@ public record APIQuery(int limit,
             QueryParam.LOWEST_DEPTH.toString() + this.lowestDepth + "&" +
             QueryParam.HIGHEST_DEPTH.toString() + this.highestDepth;
     }
+
 }

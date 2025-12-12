@@ -3,6 +3,9 @@ import com.google.gson.*;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.stream.StreamSupport;
 
 public class JSONToRecord {
@@ -10,20 +13,35 @@ public class JSONToRecord {
     static final private JSONToRecord instance = new JSONToRecord();
     static public JSONToRecord getInstance() { return JSONToRecord.instance; }
 
+    public void validateResponseStructure(JsonObject JSONObj){
+        if (!JSONObj.has("features")) throw new JsonSyntaxException("Server response JSON has invalid structure - does not have 'features' field");
+        //^ "features" field has Earthquake instances array.
+        if (!JSONObj.get("features").isJsonArray()) throw new JsonSyntaxException("Server response JSON has invalid structure - 'features' field is not a JSON array");
+        //^ "features" field must be a JSON array.
+        if (JSONObj.getAsJsonArray("features").isEmpty()) throw new NoSuchElementException("Query responded with no Earthquake instances therefore cannot process data - 'features' array is empty");
+        //^ Ensure there is at least one earthquake instance to process.
+    }
+
     /**
      * Only public method of this class.
      * Converts earthquake instance JSON objects to earthquake entry records.
-     * @param JSONObj JSON object of the API response.
+     * @param JSONResponse JSON object of the API response.
      * @return Array of 'EarthquakeEntry' records converted from the given JSON object.
      * @throws JsonSyntaxException if API version is incompatible or if JSON structure is invalid.
      */
-    public EarthquakeEntry[] convert(JsonObject JSONObj){
-        this.checkVersion(JSONObj);
+    public EarthquakeEntry[] convert(JsonObject JSONResponse){
+        this.checkVersion(JSONResponse);
         //^ Vastly different API versions may cause unexpected behaviours.
-        this.validateJSON(JSONObj);
-        //^ Validate structure of each earthquake instance before attempting to extract data from it.
 
-        JsonArray filteredJSONArr = this.filterEarthquakeInstances(JSONObj.getAsJsonArray("features"));
+        this.validateResponseStructure(JSONResponse);
+        //^ Validate basic structure of the response JSON object - check fields.
+
+        for (JsonElement earthquake : JSONResponse.getAsJsonArray("features")) {
+            this.validateEarthquakeInstance(earthquake.getAsJsonObject());
+            //^ Validate structure of each earthquake instance before attempting to extract data from it.
+        }
+
+        JsonArray filteredJSONArr = this.filterEarthquakeInstances(JSONResponse.getAsJsonArray("features"));
         //^ Get only the earthquake instances with Moment Magnitude type.
         //^ Unnecessary fields (such as 'bbox', 'metadata', 'type', etc.) is filtered out here to reduce processing in the next step.
 
@@ -33,14 +51,19 @@ public class JSONToRecord {
     /**
      * Checks API version from the response JSON object.
      * Prevents API incompatibility issues - major version differences may cause unexpected behaviours.
-     * @param JSONObj
+     * @param JSONObj api response JSON object.
      * @throws JsonSyntaxException if API version is incompatible or if JSON structure is invalid.
      */
     private void checkVersion(JsonObject JSONObj) {
-        if (!JSONObj.has("api") || JSONObj.has("features")) throw new JsonSyntaxException("Server response JSON has invalid structure - does not have 'api' and/or 'features' fields");
-        //^ Basic structure validation.
-        //^ Prevents 'NullPointerException' when checking those fields.
-        if (!JSONObj.get("api").getAsString().startsWith("1.")) throw new JsonSyntaxException("Program is out-of-date for the USGS api.");
+        //: Basic structure validation.
+        //: Prevents 'NullPointerException' when checking those fields.
+        if (!JSONObj.has("metadata")) throw new JsonSyntaxException("Server response JSON has invalid structure - does not have 'metadata' field");
+        //^ "features" field has Earthquake instances array.
+        //^ "metadata" field has "api" field.
+        if (!JSONObj.get("metadata").getAsJsonObject().has("api")) throw new JsonSyntaxException("Server response JSON has invalid structure - does not have 'api' sub-field");
+        //^ "api" field has api version (as string).
+
+        if (!JSONObj.get("metadata").getAsJsonObject().get("api").getAsString().startsWith("1.")) throw new JsonSyntaxException("Program is out-of-date for the USGS api.");
         //^ Check API version compatibility.
     }
     /**
@@ -59,9 +82,9 @@ public class JSONToRecord {
             //^ Uses 'StreamSupport' to address JsonArray's lack of a '.stream()' method.
             .map(JsonElement::getAsJsonObject)
             .filter(instance -> {
-                if (!instance.has("magType")) throw new JsonSyntaxException("Server response JSON has invalid structure - not all earthquake instances have 'magType' field");
-                //^ Prevents 'NullPointerException' when checking 'magType' field.
-                return instance.get("magType").getAsString().startsWith("mw");
+                /// if (!instance.has("magType")) throw new JsonSyntaxException("Server response JSON has invalid structure - not all earthquake instances have 'magType' field");
+                /// //^ Prevents 'NullPointerException' when checking 'magType' field.
+                return instance.getAsJsonObject("properties").get("magType").getAsString().startsWith("mw");
                 //^ Only want Moment Magnitude type earthquakes.
                 //^ '.startsWith' is used as there are multiple Moment Magnitude types such as 'mwc', 'mww', etc.
             })
@@ -76,7 +99,7 @@ public class JSONToRecord {
      * //! @param JsonObject JSON object of the API response.
      * @throws JsonSyntaxException if at least one earthquake instance has invalid structure.
      */
-    private void validateJSON(JsonObject earthquakeInstance){
+    private void validateEarthquakeInstance(JsonObject earthquakeInstance){
         //* Validation is for structure only - data validity is verified in the record's ('EarthquakeEntry') constructor.
         if (!earthquakeInstance.has("properties") || !earthquakeInstance.has("geometry")) throw new JsonSyntaxException("At least one of the earthquake instancies, in the response JSON, has incorrect field structure - missing 'properties' and/or 'geometry' fields");
         //^ Basic structure validation - the two main.
@@ -110,7 +133,7 @@ public class JSONToRecord {
                 //: Restructure JSON object fields, by making a new JSON obj, to match 'EarthquakeEntry' record fields.
                 JsonObject formattedInstanceObj = new JsonObject();
                 formattedInstanceObj.add("magnitude", instanceObj.getAsJsonObject("properties").getAsJsonPrimitive("mag"));
-                formattedInstanceObj.add("place", instanceObj.getAsJsonObject("properties").getAsJsonObject("place"));
+                formattedInstanceObj.add("place", instanceObj.getAsJsonObject("properties").getAsJsonPrimitive("place"));
                 formattedInstanceObj.add("time", new JsonPrimitive(this.unixToDateTime(instanceObj.getAsJsonObject("properties").getAsJsonPrimitive("time").getAsLong()).toString()));
                 formattedInstanceObj.add("longitude", instanceObj.getAsJsonObject("geometry").getAsJsonArray("coordinates").get(0).getAsJsonPrimitive());
                 formattedInstanceObj.add("latitude", instanceObj.getAsJsonObject("geometry").getAsJsonArray("coordinates").get(1).getAsJsonPrimitive());

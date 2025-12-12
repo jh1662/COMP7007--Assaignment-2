@@ -7,7 +7,7 @@ enum QueryParam {
     LATITUDE("latitude="),
     LONGITUDE("longitude="),
     RADIUS_KM("maxradiuskm="),
-    START_TIME("starttime"),
+    START_TIME("starttime="),
     //^ Value expected in "ISO8601" and UTC format.
     //^ Valid as from current date back to 30 days before the end time.
     END_TIME("endtime="),
@@ -15,8 +15,8 @@ enum QueryParam {
     //^ Must not exceed current data and time.
     LOWEST_MAGNITUDE("minmagnitude="),
     HIGHEST_MAGNITUDE("maxmagnitude="),
-    LOWEST_DEPTH("minDepth="),
-    HIGHEST_DEPTH("maxDepth=");
+    LOWEST_DEPTH("mindepth="),
+    HIGHEST_DEPTH("maxdepth=");
 
     private final String value;
     //^ Holds string representation of the query params.
