@@ -1,3 +1,4 @@
+//: External library import for JSON support and parsing.
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
@@ -8,7 +9,13 @@ import java.net.ConnectException;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.util.stream.Collectors;
 
+/**
+ * Singleton class responsible for sending HTTP requests to the USGS API server and retrieving JSON response data.
+ * <p>
+ * Utilises 'HttpURLConnection' import for network communication, and external 'Gson' library import for JSON parsing.
+ */
 public class HTTPRetriever {
     //! API doc at - https://earthquake.usgs.gov/fdsnws/event/1/
 
@@ -18,6 +25,14 @@ public class HTTPRetriever {
 
     //! No constructor to enforce singleton pattern.
 
+    /**
+     * Command-like method sends API query, to USGS server, and retrieves JSON response data.
+     * Calls helper methods to send the query, retrieve response, and decode the JSON data.
+     * @param query APIQuery object representing the constructed API query.
+     * @return JsonObject representing the JSON response data from the API.
+     * @throws IOException if there are issues with network connection or data retrieval.
+     * @throws MalformedURLException if the constructed URL is invalid.
+     */
     public JsonObject requestAPIDataRecord(APIQuery query) throws IOException {
         URL uRL;
         try { uRL = new URL(query.toString()); }
@@ -33,20 +48,40 @@ public class HTTPRetriever {
         return responseData;
     }
 
+    /**
+     * Helper method reads HTTP response stream and decodes it into a JSON object.
+     * <p>
+     * 'StringBuilder' is used for performance’s sake (in concatenation).
+     * @param hTTPConnection HttpURLConnection object representing the established connection.
+     * @return JsonObject representing the decoded JSON data from the response.
+     * @throws IOException if there are issues reading the response stream.
+     */
     private JsonObject fetchJSON(HttpURLConnection hTTPConnection) throws IOException {
         //: Store response data from HTTP response as string using buffers - one line at a time.
         StringBuilder response = new StringBuilder();
-        String inputLine;
+
         try {
             BufferedReader bufferReader = new BufferedReader(new InputStreamReader(hTTPConnection.getInputStream()));
-            while ((inputLine = bufferReader.readLine()) != null) { response.append(inputLine); }
-            bufferReader.close();
+            String body = bufferReader.lines().collect(Collectors.joining());
+            //^ Not technically a lambda but, just like a method reference ("::"), it is a more concise way for the same end result.
+            //^ However stream is used, as '.lines()' returns a stream of lines to use the '.collect' method on.
+            //^ More concise replacement for `String inputLine; while ((inputLine = bufferReader.readLine()) != null) { response.append(inputLine); }`.
+            response.append(body);
         }
         catch (IOException e) { throw new IOException("Failed to read data from HTTP response stream."); }
 
         return JsonParser.parseString(response.toString()).getAsJsonObject();
     }
 
+    /**
+     * Helper method establishes HTTP connection, as type "GET", to the USGS API server and returns the response data (as a connection).
+     * <p>
+     * Retries up to 5 times to establish network connection in case of transient network issues.
+     * @param query URL object representing the constructed API query.
+     * @return HttpURLConnection object representing the established connection.
+     * @throws IOException if there are issues with network connection or if the GET request fails.
+     * @throws ConnectException if the GET request receives a non-200 HTTP response code.
+     */
     private HttpURLConnection sendToServer(URL query) throws IOException {
         HttpURLConnection hTTPConnection;
         try {

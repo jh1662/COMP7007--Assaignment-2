@@ -211,7 +211,7 @@ public record EarthquakeReport(
         //: Sorting times in ascending order is critical to prevent negative durations when calculating mean.
         ZonedDateTime sortedTimes[] = Arrays.stream(dataSet)
             //^ Turn subjected array into stream.
-            .map(EarthquakeEntry::time)
+            .map(EarthquakeEntry::getTime)
             //^ Maps the time component to turn record array stream into a 'ZonedDateTime' stream.
             //^ 'EarthquakeEntry::time' lambda is short for 'entry -> entry.time()'.
             .sorted()
@@ -303,7 +303,7 @@ public record EarthquakeReport(
         //* As mentioned in 'this.findMeanIntermissionDurationHours', time prediction uses hours.
         ZonedDateTime latestOccurrence = Arrays.stream(dataSet)
             //^ Turn subjected array into stream.
-            .map(EarthquakeEntry::time)
+            .map(EarthquakeEntry::getTime)
             //^ Maps the time component to turn record array stream into a 'ZonedDateTime' stream.
             //^ 'EarthquakeEntry::time' lambda is short for 'entry -> entry.time()'.
             .max(ZonedDateTime::compareTo)
@@ -333,19 +333,19 @@ public record EarthquakeReport(
         StringBuilder report = new StringBuilder("Earthquake report:\n");
         //^ In this method, StringBuilder is a better alternative for string concatenation in terms of code readability.
 
-        report.append(String.format("> Magnitude - mean of %.1f with quartiles (Q1, Q2, and Q3) of %.1f, %.1f, and %.1f.\n",
+        report.append(String.format("> Magnitude - mean of %.1f with quartiles (Q1, Q2, and Q3) of %.1f Mw, %.1f Mw, and %.1f Mw.\n",
             this.meanMagnitude, this.magnitudeQuartiles[0], this.magnitudeQuartiles[1], this.magnitudeQuartiles[2]
         ));
-        report.append(String.format("> Timing - mean intermission time of %.1f hours with a monthly frequency of %.2f days.\n",
+        report.append(String.format("> Timing - mean intermission time of %.1f hours with a monthly frequency of %.2f earthquakes per month.\n",
             this.meanIntermissionTimeHours, this.monthlyFrequency
         ));
-        report.append(String.format("> Location - centroid at (%.3f\u00B0 N, %.3f\u00B0 E).\n",
+        report.append(String.format("> Location - centroid at %.3f\u00B0 N %.3f\u00B0 E.\n",
             this.centroidCoords[0], this.centroidCoords[1]
         ));
         report.append(String.format("> Depth - mean of %.2f km.\n",
             this.meanDepth
         ));
-        report.append(String.format("> Predicted next earthquake occurrence (based on given data set) - estimated to occur at %.3f\u00B0 N, %.3f\u00B0 E, with magnitude strength of %.1f hitting %.2f deep, between %s and %s.\n",
+        report.append(String.format("> Predicted next earthquake occurrence (based on given data set) - estimated to occur at %.3f\u00B0 N, %.3f\u00B0 E, with magnitude strength of %.1f Mw hitting %.2f Km deep, between %s and %s.\n",
             this.centroidCoords[0], this.centroidCoords[1], this.meanMagnitude, this.meanDepth, this.predictedNextTime[0], this.predictedNextTime[1]
         ));
         report.append(String.format("> Total number of earthquake entries analysed - %d.\n",
@@ -368,9 +368,10 @@ public record EarthquakeReport(
         //^ Using StringBuilder is a better alternative for string concatenation.
         //^ This approach is more efficient for building string in terms of memory usage and performance.
         //^ Also is simpler for any extensibility needed (e.g., redirecting output to a logging file).
-        for (int i = 0; i < this.dataSet.length; i++) {
-            rawDataSet.append(String.format("> Index #%d %s\n", i, dataSet[i].toString()));
-        }
+        IntStream.range(0, this.dataSet.length).forEach(i -> rawDataSet.append(String.format("> Index #%d %s\n", i, dataSet[i].toString())));
+        //^ Using 'IntStream' to replace traditional for-loop for better readability.
+        //^ lambda's param is the index which returns the string representation, of each earthquake entry, at that index.
+        //^ Replaces `for (int i = 0; i < this.dataSet.length; i++) { rawDataSet.append(String.format("> Index #%d %s\n", i, dataSet[i].toString())); }`
         return rawDataSet.toString();
     }
 

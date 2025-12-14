@@ -1,3 +1,7 @@
+/**
+ * Dictionary-like enum representing various query parameters for constructing URL requests.
+ * Includes their corresponding string representations as URL query param components.
+ */
 enum QueryParam {
     FORMAT("format="),
     //^ Param has constant arg "geojson&jsonerror".
@@ -23,6 +27,7 @@ enum QueryParam {
 
     /**
      * Constructor assigns string representation of the query params.
+     * @param value String representation of the query param for the URL request.
      */
     QueryParam(String value) { this.value = value; }
 

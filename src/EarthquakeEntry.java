@@ -5,6 +5,9 @@ import java.time.ZonedDateTime;
 /**
  * Record class representing a single earthquake entry.
  * Immutable data structure holding details of an earthquake instance.
+ * <p>
+ * To allow direct conversion from JSON object to this record, the 'time' field is stored as a string (unix epoch timestamp) internally.
+ * However, a getter method ('this.getTime') is provided to retrieve it as a 'ZonedDateTime' object.
  * @param magnitude The magnitude of the earthquake.
  * @param place The place where the earthquake occurred.
  * @param time The time when the earthquake occurred.
@@ -15,7 +18,7 @@ import java.time.ZonedDateTime;
 public record EarthquakeEntry(
     double magnitude,
     String place,
-    ZonedDateTime time,
+    String time,
     double longitude,
     double latitude,
     double depth
@@ -31,7 +34,7 @@ public record EarthquakeEntry(
     public EarthquakeEntry{
         EarthquakeEntry.validateMagnitude(magnitude);
         EarthquakeEntry.validatePlace(place);
-        EarthquakeEntry.validateTime(time);
+        EarthquakeEntry.validateTime(EarthquakeEntry.unixEpochToDateTime(time));
         EarthquakeEntry.validateLongitude(longitude);
         EarthquakeEntry.validateLatitude(latitude);
         EarthquakeEntry.validateDepth(depth);
@@ -119,9 +122,30 @@ public record EarthquakeEntry(
             "earthquake entry: earthquake in %s (at %.3f\u00B0 N %.3f\u00B0 E) happened at %s with a magnitude of %.1fMw hitting a depth: %.2f km)]",
             //^ String template with placeholders.
             //^ Using '\u00B0' unicode for degree symbol.
-            this.place, this.latitude, this.longitude, this.time, this.magnitude, this.depth
+            this.place, this.latitude, this.longitude, this.getTime(), this.magnitude, this.depth
             //^ Data for said placeholders.
             //^ 'this.time.toString()' is implicitly called by the '%s' placeholder.
         );
+    }
+    /**
+     * Converts unix timestamp (as long int JSON element) to 'ZonedDateTime' object.
+     * <p>
+     * Used for both conversions (getter) and validation ('this.time').
+     * @param timestamp The unix epoch timestamp, as string representation, to convert.
+     * @return ZonedDateTime object representing the given timestamp.
+     */
+    private static ZonedDateTime unixEpochToDateTime(String timestamp) {
+        //* Converts unix timestamp (as long (long int) JSON element) to 'ZonedDateTime' object.
+        Instant instant = Instant.ofEpochMilli(Long.parseLong(timestamp));
+        //^ Uses unix epoch oriented class ('Instant') instance for use as argument in 'ZonedDateTime.ofInstant' call.
+        return ZonedDateTime.ofInstant(instant, ZoneId.of("UTC"));
+    }
+    /**
+     * Getter forwarder method to retrieve 'this.time' field as 'ZonedDateTime' object.
+     * @return Timestamp of the earthquake's occurrence.
+     */
+    public ZonedDateTime getTime() {
+        //* Getter method to retrieve 'this.time' field as 'ZonedDateTime' object.
+        return EarthquakeEntry.unixEpochToDateTime(this.time);
     }
 }

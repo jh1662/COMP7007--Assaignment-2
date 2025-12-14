@@ -1,18 +1,36 @@
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.InputMismatchException;
+import java.util.Map;
 import java.util.Scanner;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
+/**
+ * Interpreter class implementing ClientActions interface.
+ * Provides user interface loop and command methods for user interaction.
+ * <p>
+ * Makes use of HTTPRetriever and JSONToRecord singleton instances to retrieve and convert data from USGS api respectively.
+ * Caches retrieved data set and generated reports for user viewing and exporting.
+ */
 public class Interpreter implements ClientActions {
 
     private final HTTPRetriever retriever = HTTPRetriever.getInstance();
     private final JSONToRecord converter = JSONToRecord.getInstance();
+
+    private final Scanner scanner = new Scanner(System.in);
 
     private final ArrayList<EarthquakeReport> reports = new ArrayList<>();
     private EarthquakeEntry[] currentDataSet = null;
     private ZonedDateTime startTimeStamp;
     private ZonedDateTime endTimeStamp;
 
+    /**
+     * Main user interface loop - runs the user commands, and inform user, until user exits program.
+     * Assures that the program keeps running until user decides to exit.
+     * <p>
+     * Catches exceptions, thrown by command methods, and informs user of the error instead of crashing the program.
+     */
     public void interfacing() {
         while (true) {
             try { this.cycle(); }
@@ -20,27 +38,51 @@ public class Interpreter implements ClientActions {
         }
     }
 
+    /**
+     * Single cycle of user interface loop - process user command once.
+     * Allows use to choose which command to run.
+     * Called by 'this.interfacing()' method repeatedly.
+     * <p>
+     * Makes use of lambda expressions (specifically method references) to improve readability and maintainability.
+     * A command map ('Map<String, Runnable>') is used for better performance compared to an enhanced switch statement.
+     * <p>
+     * Forwards thrown exceptions to 'this.interfacing()' method for handling.
+     */
     private void cycle() {
-        String command = processInput(InputType.INTEGER, "Enter command (type '7' for help): ");
-        switch (command) {
-            case "1" -> this.submitQuery();
-            case "2" -> this.generateReport();
-            case "3" -> this.viewRawDataSet();
-            case "4" -> this.exportAllReports();
-            case "5" -> this.compareToPreviousReport();
-            case "6" -> this.exitProgram();
-            case "7" -> this.getManual();
-            default -> System.out.println("Invalid command; please input a valid command number (1-7).");
-        }
+        Map<String, Runnable> commandMap = Map.of(
+            //* Map but the values are lambdas (specifically method references), instead of data, for better readability.
+            "1", this::submitQuery,
+            //^ Would be `case "1" -> this.submitQuery();` in a enhanced switch statement.
+            "2", this::generateReport,
+            "3", this::viewRawDataSet,
+            "4", this::exportAllReports,
+            "5", this::compareToPreviousReport,
+            "6", this::exitProgram,
+            "7", this::getManual
+        );
+        String command = processInput(InputType.INTEGER, "Enter command (type '7' for help): ").trim();
+        //^ Take valid integer-parsable string user input for command selection.
+        commandMap.getOrDefault(command, () -> System.out.println("Invalid command; please input a valid command number (1-7).")).run();
+        //^ Run the corresponding command lambda, or print invalid command message as specified in the arg lambda.
     }
 
+    /**
+     * Processes user input according to expected input type.
+     * Validates input and prompts user again if invalid input is given.
+     * Assures user to not cause unexpected behavior by giving unexpected inputs.
+     * <p>
+     * Uses recursion to re-prompt user until valid input is given.
+     * @param inputType The expected type of user input.
+     * @param promptMessage The message to prompt user before input.
+     * @return The valid user input as string.
+     * @throws InputMismatchException if user averted input (empty or only whitespace).
+     */
     private String processInput(InputType inputType, String promptMessage) {
         //* Validates inputs according to expected inputs.
         System.out.println(promptMessage);
         //^ Prompt message, before input, so user knows what to put.
 
-        Scanner scanner = new Scanner(System.in);
-        String userInput = scanner.nextLine();
+        String userInput = this.scanner.nextLine();
         if (userInput.isBlank()) throw new InputMismatchException("Input averted");
         //^ If user don't input anything (empty or only whitespace), we consider it as averted input.
         //^ Also how user wants to go back or cancel the current operation.
@@ -53,7 +95,7 @@ public class Interpreter implements ClientActions {
                 //* Already checked if empty using 'isBlank'.
                 if (userInput.length() > 60) {
                     System.out.println(userInput + "is excessively long input; must be 60 characters or less.");
-                    this.processInput(InputType.STRING, promptMessage);
+                    return this.processInput(InputType.STRING, promptMessage);
                 }
                 //^ Prevents excessively long string inputs.
             }
@@ -61,14 +103,14 @@ public class Interpreter implements ClientActions {
                 try { Integer.parseInt(userInput); }
                 catch (NumberFormatException e) {
                     System.out.println(userInput + "is invalid input; must be an integer.");
-                    this.processInput(InputType.INTEGER, promptMessage);
+                    return this.processInput(InputType.INTEGER, promptMessage);
                 }
             }
             case InputType.DECIMAL -> {
                 try { Double.parseDouble(userInput); }
                 catch (NumberFormatException e) {
                     System.out.println(userInput + "is invalid input; must be an decimal.");
-                    this.processInput(InputType.DECIMAL, promptMessage);
+                    return this.processInput(InputType.DECIMAL, promptMessage);
                 }
             }
             case InputType.TIMESTAMP -> {
@@ -80,7 +122,7 @@ public class Interpreter implements ClientActions {
                 //^ Not only checks the format, but also the ranges of month, day, and hour.
                 if (!userInput.matches(timestampCheckRegex)) {
                     System.out.println(userInput + " is invalid input; must be in 'YYYY-MM-DD:HH' format (UTC time zone).");
-                    this.processInput(InputType.TIMESTAMP, promptMessage);
+                    return this.processInput(InputType.TIMESTAMP, promptMessage);
                 }
             }
         }
@@ -88,6 +130,13 @@ public class Interpreter implements ClientActions {
         return userInput;
     }
 
+    /**
+     * Converts validated timestamp string to ZonedDateTime object.
+     * <p>
+     * Assumes timestamp arg is valid - does not throw or forward any exceptions.
+     * @param timestamp The validated timestamp string in 'YYYY-MM-DD:HH' format.
+     * @return The corresponding ZonedDateTime object in UTC time zone.
+     */
     private ZonedDateTime toZonedDateTime(String timestamp) {
         //* Called after successful validation of timestamp input.
         //* Converts string format 'YYYY-MM-DD:HH' to 'yyyy-mm-ddThh:mm:ssZ' parsable string, before parsing.
@@ -98,15 +147,30 @@ public class Interpreter implements ClientActions {
         return ZonedDateTime.parse(parsableTimestamp);
     }
 
+    /**
+     * Command-like method sets up and submits query to USGS api according to user inputs.
+     * Retrieve, decode, and convert the data set from the api response.
+     * <p>
+     * Stores the data set as 'this.currentDataSet' for viewing and report generation.
+     * <p>
+     * Forwards exceptions thrown by retriever and converter to caller method.
+     * <p>
+     * One of the actions available to user, as a command, in the user CLI (Command-Line Interface).
+     * @throws IllegalArgumentException if any of the user inputs are invalid (out of bounds).
+     */
     @Override
     public void submitQuery() {
+        //: Stored as fields as its is not part of raw data set, but used in report generation.
+        this.startTimeStamp = this.toZonedDateTime(this.processInput(InputType.TIMESTAMP, "Enter the start timestamp (format 'YYYY-MM-DD:HH' in UTC timezone): "));
+        this.endTimeStamp = this.toZonedDateTime(this.processInput(InputType.TIMESTAMP, "Enter the end timestamp (format 'YYYY-MM-DD:HH' in UTC timezone): "));
+
         APIQuery query = new APIQuery(
             Integer.parseInt(this.processInput(InputType.INTEGER, "Enter the limit of earthquake entries to retrieve (0-20000): ")),
             Double.parseDouble(this.processInput(InputType.DECIMAL, "Enter the latitude of the center point of area (-90 to 90): ")),
             Double.parseDouble(this.processInput(InputType.DECIMAL, "Enter the longitude of the center point of area (-180 to 180): ")),
             Integer.parseInt(this.processInput(InputType.INTEGER, "Enter the maximum radius from center point to retrieve earthquake entries (in kilometers, 0 to 20001.6): ")),
-            this.toZonedDateTime(this.processInput(InputType.TIMESTAMP, "Enter the start timestamp (format 'YYYY-MM-DD:HH' in UTC timezone): ")),
-            this.toZonedDateTime(this.processInput(InputType.TIMESTAMP, "Enter the end timestamp (format 'YYYY-MM-DD:HH' in UTC timezone): ")),
+            this.startTimeStamp,
+            this.endTimeStamp,
             Double.parseDouble(this.processInput(InputType.DECIMAL, "Enter the minimum magnitude of earthquake entries to retrieve (-5.0 to 10.0): ")),
             Double.parseDouble(this.processInput(InputType.DECIMAL, "Enter the maximum magnitude of earthquake entries to retrieve (-5.0 to 10.0): ")),
             Double.parseDouble(this.processInput(InputType.DECIMAL, "Enter the minimum depth of earthquake entries to retrieve (in kilometers, greater than 0 to 800): ")),
@@ -117,6 +181,15 @@ public class Interpreter implements ClientActions {
 
         System.out.println("Query Submitted, responded, recorded, converted, and stored successfully.");
     }
+    /**
+     * Delegator method generates 'EarthquakeReport' record from 'this.currentDataSet' (cache basically) before displaying string representation.
+     * Such record is also stored in 'this.report' for history view and comparison.
+     * <p>
+     * Forwards exceptions thrown due to empty data set to caller method.
+     * <p>
+     * One of the actions available to user, as a command, in the user CLI (Command-Line Interface).
+     * @throws IllegalStateException if 'this.currentDataSet' is empty (null).
+     */
     @Override
     public void generateReport() {
         if (this.currentDataSet == null) throw new IllegalStateException("Current data set empty; query the API first before generating report.");
@@ -124,6 +197,14 @@ public class Interpreter implements ClientActions {
         this.reports.add(report);
         System.out.println(report.toString());
     }
+    /**
+     * Presentation method displays the raw data set from 'this.currentDataSet' (cache).
+     * <p>
+     * Simply prints out, instead for throwing exceptions, if data set is instantiated but has no populations - results from zero-matches query.
+     * <p>
+     * One of the actions available to user, as a command, in the user CLI (Command-Line Interface).
+     * @throws IllegalStateException if 'this.currentDataSet' is empty (null).
+     */
     @Override
     public void viewRawDataSet() {
         if (this.currentDataSet == null) throw new IllegalStateException("Current data set empty; query the API first before viewing data set.");
@@ -131,35 +212,59 @@ public class Interpreter implements ClientActions {
         if (this.currentDataSet.length == 0) System.out.println("Current data set is empty; no earthquake entries retrieved from last query.");
         //^ Edge case - zero entries retrieved from last query.
         //^ Does not throw exception as there is nothing wrong.
-        StringBuilder rawDataSet = new StringBuilder();
+        StringBuilder rawDataSet = new StringBuilder("### Raw Data Set: ###\n");
         //^ Using 'StringBuilder' for efficient string concatenation in loops.
-        for (int i = 0; i <= this.currentDataSet.length; i++) rawDataSet.append("Entry #").append(i + 1).append(this.currentDataSet[i].toString()).append("\n");
-        //^ Used for-loop instead of enhanced for-loop to show index of each earthquake entry.
+        IntStream.range(0, this.currentDataSet.length).forEach(i -> rawDataSet.append("> #").append(i + 1).append(" ").append(this.currentDataSet[i].toString()).append("\n"));
+        //^ Replaces 'for (int i = 0; i < this.currentDataSet.length; i++) rawDataSet.append("> #").append(i + 1).append(" ").append(this.currentDataSet[i].toString()).append("\n");'
+        //^ Used 'IntStream' instead of normal '.stream' to show index of each earthquake entry.
         //^ Append chain is preferred here, over string format, as most strings are small (except earthquake entry).
+        rawDataSet.append("### ############# ###\n");
         System.out.println(rawDataSet.toString());
     }
+    /**
+     * Presentation method exports all cached reports ('this.reports') to console.
+     * <p>
+     * One of the actions available to user, as a command, in the user CLI (Command-Line Interface).
+     * @throws IllegalStateException if no cached reports exist ('this.reports' being empty).
+     */
     @Override
     public void exportAllReports() {
         if (this.reports.isEmpty()) throw new IllegalStateException("No cached reports to export; generate report first before exporting.");
 
-        StringBuilder allData = new StringBuilder();
-        //^ Using 'StringBuilder' for efficient string concatenation in loops.
-        for (int i = 0; i < this.reports.size(); i++) {
-            EarthquakeReport report = this.reports.get(i);
-            allData.append("--- Report #").append(i + 1).append(" ---\n");
-            allData.append(report.toString()).append("\n");
-            allData.append("### Raw Data Set: ###\n");
-            allData.append(report.renderRawDataSet()).append("\n");
-            allData.append("### ############# ###\n");
-            allData.append("--- --------------- ---\n");
-        }
-        allData.append("ALL REPORTS (and their respective raw data sets) EXPORTED SUCCESSFULLY TO CONSOLE\n");
+        String allData = IntStream.range(0, this.reports.size())
+            //^ 'IntStream' to show index of each report.
+            //^ Stream replaces `for (int i = 0; i < this.reports.size(); i++) {`
+            .mapToObj(i -> {
+                EarthquakeReport report = this.reports.get(i);
+                return new StringBuilder()
+                    //^ Using 'StringBuilder' for efficient string concatenation in loops.
+                    //^ Because 'StringBuilder' is not used outside lambda scope - hence is declared here.
+                    .append("--- Report #").append(i + 1).append(" ---\n")
+                    .append(report.toString()).append("\n")
+                    .append("### Raw Data Set: ###\n")
+                    .append(report.renderRawDataSet()).append("\n")
+                    .append("### ############# ###\n")
+                    .append("--- --------------- ---\n")
+                    .toString();
+            })
+            .collect(Collectors.joining());
+            //^ Concatenates all report strings.
+
+        allData += "ALL REPORTS (and their respective raw data sets) EXPORTED SUCCESSFULLY TO CONSOLE\n";
         System.out.println(allData.toString());
     }
+    /** unimplemented method */
     @Override
     public void compareToPreviousReport() {
         throw new UnsupportedOperationException("This functionality is not yet implemented.");
     }
+    /**
+     * Terminal method exits the program safely.
+     * <p>
+     * Prints friendly exit message before exiting for responsiveness’s sake.
+     * <p>
+     * One of the actions available to user, as a command, in the user CLI (Command-Line Interface).
+     */
     @Override
     public void exitProgram() {
         System.out.println("Exiting program... Goodbye valued customer!");
@@ -167,6 +272,13 @@ public class Interpreter implements ClientActions {
         System.exit(0);
         //^ Exit program safely.
     }
+    /**
+     * Printer method displays user interface manual to console.
+     * <p>
+     * Uses multi-line string representation for better readability.
+     * <p>
+     * One of the actions available to user, as a command, in the user CLI (Command-Line Interface).
+     */
     @Override
     public void getManual() {
         System.out.println(

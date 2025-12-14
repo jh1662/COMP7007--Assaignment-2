@@ -1,18 +1,23 @@
 import com.google.gson.*;
-
-import java.time.Instant;
-import java.time.ZoneId;
-import java.time.ZonedDateTime;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.stream.StreamSupport;
 
+/**
+ * Allows converting JSON objects, of earthquake instances, into 'EarthquakeEntry' records.
+ * <p>
+ * Implements singleton pattern to ensure only one instance exists.
+ */
 public class JSONToRecord {
-
+    //: Singleton pattern implementation.
     static final private JSONToRecord instance = new JSONToRecord();
     static public JSONToRecord getInstance() { return JSONToRecord.instance; }
 
+    /**
+     * Validates basic structure of the response JSON object.
+     * Ensures required fields are present, and of correct types.
+     * @param JSONObj api response JSON object.
+     * @throws JsonSyntaxException if JSON structure is invalid.
+     */
     public void validateResponseStructure(JsonObject JSONObj){
         if (!JSONObj.has("features")) throw new JsonSyntaxException("Server response JSON has invalid structure - does not have 'features' field");
         //^ "features" field has Earthquake instances array.
@@ -36,10 +41,12 @@ public class JSONToRecord {
         this.validateResponseStructure(JSONResponse);
         //^ Validate basic structure of the response JSON object - check fields.
 
-        for (JsonElement earthquake : JSONResponse.getAsJsonArray("features")) {
-            this.validateEarthquakeInstance(earthquake.getAsJsonObject());
-            //^ Validate structure of each earthquake instance before attempting to extract data from it.
-        }
+        StreamSupport.stream(JSONResponse.getAsJsonArray("features").spliterator(), false)
+            //* Validate structure of each earthquake instance before attempting to extract data from it.
+            .map(JsonElement::getAsJsonObject)
+            //^ Convert each JSON element into JSON object because 'JsonElement' lacks the methods that 'JsonObject' have.
+            .forEach(this::validateEarthquakeInstance);
+            //^ The actual validation call fore each earthquake instance.
 
         JsonArray filteredJSONArr = this.filterEarthquakeInstances(JSONResponse.getAsJsonArray("features"));
         //^ Get only the earthquake instances with Moment Magnitude type.
@@ -134,7 +141,7 @@ public class JSONToRecord {
                 JsonObject formattedInstanceObj = new JsonObject();
                 formattedInstanceObj.add("magnitude", instanceObj.getAsJsonObject("properties").getAsJsonPrimitive("mag"));
                 formattedInstanceObj.add("place", instanceObj.getAsJsonObject("properties").getAsJsonPrimitive("place"));
-                formattedInstanceObj.add("time", new JsonPrimitive(this.unixToDateTime(instanceObj.getAsJsonObject("properties").getAsJsonPrimitive("time").getAsLong()).toString()));
+                formattedInstanceObj.add("time", instanceObj.getAsJsonObject("properties").getAsJsonPrimitive("time"));
                 formattedInstanceObj.add("longitude", instanceObj.getAsJsonObject("geometry").getAsJsonArray("coordinates").get(0).getAsJsonPrimitive());
                 formattedInstanceObj.add("latitude", instanceObj.getAsJsonObject("geometry").getAsJsonArray("coordinates").get(1).getAsJsonPrimitive());
                 formattedInstanceObj.add("depth", instanceObj.getAsJsonObject("geometry").getAsJsonArray("coordinates").get(2).getAsJsonPrimitive());
@@ -146,12 +153,5 @@ public class JSONToRecord {
             })
             .toArray(EarthquakeEntry[]::new);
             //^ Collect all mapped 'EarthquakeEntry' records into an array and return it.
-    }
-
-    private ZonedDateTime unixToDateTime(Long timeStamp) {
-        //* Converts unix timestamp (as long (long int) JSON element) to 'ZonedDateTime' object.
-        Instant instant = Instant.ofEpochMilli(timeStamp);
-        //^ Uses unix epoch oriented class ('Instant') instance for use as argument in 'ZonedDateTime.ofInstant' call.
-        return ZonedDateTime.ofInstant(instant, ZoneId.of("UTC"));
     }
 }

@@ -201,19 +201,6 @@ public record APIQuery(int limit,
      */
     @Override
     public String toString() {
-        //: Debugging print statement.
-        System.out.println(APIQuery.baseURL +
-            QueryParam.LIMIT.toString() + this.limit + "&" +
-            QueryParam.LATITUDE.toString() + this.latitude + "&" +
-            QueryParam.LONGITUDE.toString() + this.longitude + "&" +
-            QueryParam.RADIUS_KM.toString() + this.radiusKm + "&" +
-            QueryParam.START_TIME.toString() + this.startTime.toInstant().toString() + "&" +
-            QueryParam.END_TIME.toString() + this.endTime.toInstant().toString() + "&" +
-            QueryParam.LOWEST_MAGNITUDE.toString() + this.lowestMagnitude + "&" +
-            QueryParam.HIGHEST_MAGNITUDE.toString() + this.highestMagnitude + "&" +
-            QueryParam.LOWEST_DEPTH.toString() + this.lowestDepth + "&" +
-            QueryParam.HIGHEST_DEPTH.toString() + this.highestDepth);
-
         return APIQuery.baseURL +
             QueryParam.LIMIT.toString() + this.limit + "&" +
             QueryParam.LATITUDE.toString() + this.latitude + "&" +
