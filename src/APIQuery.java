@@ -114,9 +114,9 @@ public record APIQuery(int limit,
      */
     private static void radius(int km) {
         if (km <= 0) throw new IllegalArgumentException(km + " is invalid. Radius cannot be negative nor non-existent.");
-        if (km > 20001.6) throw new IllegalArgumentException(km + " is invalid. Earth circumference is ~40,000 km, thus radius cannot exceed 20,001.6 km.");
+        if (km > 20000) throw new IllegalArgumentException(km + " is invalid. Earth circumference is ~40,000 km, thus radius cannot exceed 20,001.6 km.");
         //^ Was going to limit radius is half the Earth's circumference (20,038Km) but USGS api doc uses 20,001.6 km as the default radius;
-        //^ thus 20,001.6 km is the assumed upper limit for radius.
+        //^ thus 20,000 km is the assumed upper limit for radius.
         //^ Source - https://earthquake.usgs.gov/fdsnws/event/1/ .
     }
     /**

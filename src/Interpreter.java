@@ -1,8 +1,12 @@
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
-import java.util.ArrayList;
-import java.util.InputMismatchException;
-import java.util.Map;
-import java.util.Scanner;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeFormatterBuilder;
+import java.time.format.DateTimeParseException;
+import java.time.format.ResolverStyle;
+import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -72,6 +76,14 @@ public class Interpreter implements ClientActions {
      * Assures user to not cause unexpected behavior by giving unexpected inputs.
      * <p>
      * Uses recursion to re-prompt user until valid input is given.
+     * <p>
+     * Different input types supported (declared by InputType enum):
+     * <ul>
+     *     <li>input string just as string - any non-empty string up to 512 characters.</li>
+     *     <li>input string as integer - any string that is parsable to int (by 'Integer.parseInt').</li>
+     *     <li>input string as decimal - any string that is parsable to double (by 'Double.parseDouble').</li>
+     *     <li>input string as timestamp - any string in 'YYYY-MM-DD:HH' format (UTC time zone), and with valid number components (dictated by 'ZonedDateTime.parse').</li>
+     * </ul>
      * @param inputType The expected type of user input.
      * @param promptMessage The message to prompt user before input.
      * @return The valid user input as string.
@@ -83,7 +95,7 @@ public class Interpreter implements ClientActions {
         //^ Prompt message, before input, so user knows what to put.
 
         String userInput = this.scanner.nextLine();
-        if (userInput.isBlank()) throw new InputMismatchException("Input averted");
+        if (userInput == null || userInput.isBlank()) throw new InputMismatchException("Input averted");
         //^ If user don't input anything (empty or only whitespace), we consider it as averted input.
         //^ Also how user wants to go back or cancel the current operation.
 
@@ -91,29 +103,29 @@ public class Interpreter implements ClientActions {
         //* We assume user will eventually give valid input before too many recursive calls causing stack overflow.
         switch (inputType) {
             //* Enhanced switch statement (using lambdas) for better readability.
-            case InputType.STRING -> {
+            case STRING -> {
                 //* Already checked if empty using 'isBlank'.
-                if (userInput.length() > 60) {
-                    System.out.println(userInput + "is excessively long input; must be 60 characters or less.");
+                if (userInput.length() > 512) {
+                    System.out.println(userInput + "is excessively long input; must be 512 characters or less.");
                     return this.processInput(InputType.STRING, promptMessage);
                 }
                 //^ Prevents excessively long string inputs.
             }
-            case InputType.INTEGER -> {
+            case INTEGER -> {
                 try { Integer.parseInt(userInput); }
                 catch (NumberFormatException e) {
                     System.out.println(userInput + "is invalid input; must be an integer.");
                     return this.processInput(InputType.INTEGER, promptMessage);
                 }
             }
-            case InputType.DECIMAL -> {
+            case DECIMAL -> {
                 try { Double.parseDouble(userInput); }
                 catch (NumberFormatException e) {
                     System.out.println(userInput + "is invalid input; must be an decimal.");
                     return this.processInput(InputType.DECIMAL, promptMessage);
                 }
             }
-            case InputType.TIMESTAMP -> {
+            case TIMESTAMP -> {
                 //* This scope is the main reason for this method ('this.processInputs') to exist.
                 //* String format expected: YYYY-MM-DD:HH (UTC is assumed).
                 //* Because the local processing only uses up to by-the-hour precision, we only validate up to that - user won't input minutes and shorter scales.
@@ -124,10 +136,20 @@ public class Interpreter implements ClientActions {
                     System.out.println(userInput + " is invalid input; must be in 'YYYY-MM-DD:HH' format (UTC time zone).");
                     return this.processInput(InputType.TIMESTAMP, promptMessage);
                 }
+
+                //: Checks the number components are within bounds.
+                DateTimeFormatter formatter = new DateTimeFormatterBuilder().appendPattern("yyyy-MM-dd").parseStrict().toFormatter(Locale.ROOT);
+                //^ Replacement to the faulty 'DateTimeFormatter.ofPattern("yyyy-MM-dd")'.withResolverStyle(ResolverStyle.STRICT); which did not allow ANYTHING.
+                try { LocalDate.parse(userInput.split(":")[0], formatter); }
+                catch (DateTimeParseException e) {
+                    System.out.println(userInput + " is invalid input; unable to parse timestamp due to one of the number components being out of bounds.");
+                    return this.processInput(InputType.TIMESTAMP, promptMessage);
+                }
             }
+            //! No default case needed as all enum cases are covered.
         }
 
-        return userInput;
+        return userInput.trim();
     }
 
     /**
@@ -168,7 +190,7 @@ public class Interpreter implements ClientActions {
             Integer.parseInt(this.processInput(InputType.INTEGER, "Enter the limit of earthquake entries to retrieve (0-20000): ")),
             Double.parseDouble(this.processInput(InputType.DECIMAL, "Enter the latitude of the center point of area (-90 to 90): ")),
             Double.parseDouble(this.processInput(InputType.DECIMAL, "Enter the longitude of the center point of area (-180 to 180): ")),
-            Integer.parseInt(this.processInput(InputType.INTEGER, "Enter the maximum radius from center point to retrieve earthquake entries (in kilometers, 0 to 20001.6): ")),
+            Integer.parseInt(this.processInput(InputType.INTEGER, "Enter the maximum radius from center point to retrieve earthquake entries (in kilometers, 0 to 20000): ")),
             this.startTimeStamp,
             this.endTimeStamp,
             Double.parseDouble(this.processInput(InputType.DECIMAL, "Enter the minimum magnitude of earthquake entries to retrieve (-5.0 to 10.0): ")),
@@ -209,9 +231,12 @@ public class Interpreter implements ClientActions {
     public void viewRawDataSet() {
         if (this.currentDataSet == null) throw new IllegalStateException("Current data set empty; query the API first before viewing data set.");
         //^ Used state exception to indicate no data set available to view due to not querying first.
-        if (this.currentDataSet.length == 0) System.out.println("Current data set is empty; no earthquake entries retrieved from last query.");
-        //^ Edge case - zero entries retrieved from last query.
-        //^ Does not throw exception as there is nothing wrong.
+        if (this.currentDataSet.length == 0) {
+            //* Edge case - zero entries retrieved from last query.
+            //* Does not throw exception as there is nothing wrong.
+            System.out.println("Current data set is empty; no earthquake entries retrieved from last query.");
+            return;
+        }
         StringBuilder rawDataSet = new StringBuilder("### Raw Data Set: ###\n");
         //^ Using 'StringBuilder' for efficient string concatenation in loops.
         IntStream.range(0, this.currentDataSet.length).forEach(i -> rawDataSet.append("> #").append(i + 1).append(" ").append(this.currentDataSet[i].toString()).append("\n"));
@@ -253,10 +278,22 @@ public class Interpreter implements ClientActions {
         allData += "ALL REPORTS (and their respective raw data sets) EXPORTED SUCCESSFULLY TO CONSOLE\n";
         System.out.println(allData.toString());
     }
-    /** unimplemented method */
+    /**
+     * Presentation method compares the latest cached report to the previous cached report and displays the comparison.
+     * <p>
+     * Forwards exceptions thrown due to insufficient cached reports to caller method.
+     * <p>
+     * Because this a comparison between two analysis, complete precision is required - no rounding wanted here.
+     * <p>
+     * One of the actions available to user, as a command, in the user CLI (Command-Line Interface).
+     * @throws IllegalStateException if less than two cached reports exist in 'this.reports'.
+     */
     @Override
     public void compareToPreviousReport() {
-        throw new UnsupportedOperationException("This functionality is not yet implemented.");
+        if (this.reports.isEmpty() || this.reports.size() < 2) throw new IllegalStateException("Not enough cached reports to compare; generate at least two reports before comparing.");
+
+        System.out.println(this.reports.getLast().compareTo(this.reports.get(this.reports.size() - 2)));
+        //^ `this.reports.getLast()` is shorthand for `this.reports.get(this.reports.size() - 1);`
     }
     /**
      * Terminal method exits the program safely.

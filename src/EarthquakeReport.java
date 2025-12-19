@@ -10,6 +10,8 @@ import java.util.stream.IntStream;
  * Unlike 'EarthquakeEntry', this record is not directly instantiated via its canonical constructor.
  * A static factory method is used instead to allow pre-processing of the data set before instantiation.
  * This allows calculated fields to be derived from the data set without supplying them directly.
+ * <p>
+ * Because helper most helper methods are called before record's instantiation, they must be static.
  * @param dataSet The raw earthquake data set (of earthquake entries).
  * @param magnitudeQuartiles The magnitude quartiles (Q1, Q2, and Q3).
  * @param meanMagnitude The mean magnitude.
@@ -30,14 +32,16 @@ public record EarthquakeReport(
     //^ Earthquake timing.
     double[] centroidCoords,
     //^ Earthquake location.
-    /*double predictedNextMagnitude, double[] predictedNextCoordinates,*/ ZonedDateTime[] predictedNextTime
-    //^ Predictions.
+    ZonedDateTime[] predictedNextTime
+    //^ Predictions (includes the mean values too).
 ) {
     /**
      * Static factory method to create an 'EarthquakeReport' instance.
      * Processes given earthquake data set to calculate necessary statistics and predictions.
      * <p>
      * Is used instead of canonical constructor to allow pre-processing before instantiation.
+     * <p>
+     * Canonical constructor forbids logic before 'this(' call, thus static factory method is used instead.
      * @param dataSet The earthquake data set (of earthquake entries) to process.
      * @param startTime The start time of the data set retrieval period.
      * @param endTime The end time of the data set retrieval period.
@@ -46,7 +50,6 @@ public record EarthquakeReport(
      */
     public static EarthquakeReport of(EarthquakeEntry[] dataSet, ZonedDateTime startTime, ZonedDateTime endTime) {
         //^ Canonical constructor forbids logic before 'this(' call, thus static factory method is used instead.
-
         if (dataSet.length == 0) { throw new IllegalArgumentException("fetches Earthquake data set is empty."); }
 
         //: Local processing of the data set.
@@ -213,7 +216,7 @@ public record EarthquakeReport(
             //^ Turn subjected array into stream.
             .map(EarthquakeEntry::getTime)
             //^ Maps the time component to turn record array stream into a 'ZonedDateTime' stream.
-            //^ 'EarthquakeEntry::time' lambda is short for 'entry -> entry.time()'.
+            //^ 'EarthquakeEntry::getTime' lambda is short for 'entry -> entry.time()'.
             .sorted()
             //^ Sort the 'ZonedDateTime' stream in ascending order.
             .toArray(ZonedDateTime[]::new);
@@ -259,40 +262,16 @@ public record EarthquakeReport(
         int occurrences = dataSet.length;
         int durationDays = (int) Duration.between(startTime, endTime).toDays();
 
-        return (double) durationDays / occurrences;
+        return (double) occurrences / durationDays * 30;
         //^ "(double)" makes sure decimal division is used instead of integer division.
     }
 
-    //: Predictions based on historical data and averages
-    //! Predicted next magnitude is just the mean.
-    //! Predicted next location is just the centroid coordinates.
-    /*
-    private static double predictNextMagnitude(EarthquakeEntry[] dataSet){
-        return Arrays.stream(dataSet)
-            //^ Turn subjected array into stream.
-            .mapToDouble(EarthquakeEntry::magnitude)
-            //^ Maps the magnitude component to turn record array stream into a double stream.
-            //^ 'EarthquakeEntry::magnitude' is shorthand for 'entry -> entry.magnitude()'.
-            .max()
-            //^ Find the maximum value from the stream.
-            .orElseThrow();
-            //^ Assure result is an existing decimal - converting 'OptionalDouble' to 'double'.
-            //^ An exception is thrown when no maximum exists (i.e. empty stream) but that will not happen.
-    }
-    */
-    /*
-    private static double[] predictNextCoordinates(EarthquakeEntry[] dataSet, double[] centroidCoords){
-        //* includes latitude and longitude
-        double
-        return new double[]{0.0,0.0};
-    }
-    */
     /**
      * Locally processes (using stream) to predict the next earthquake occurrence time range.
      * <p>
      * Requires previously calculated stats (monthly frequency and mean intermission duration) to calculate.
      * <p>
-     * Predicting timestamps is very imprecise, thus a range is given instead of a single timestamp.
+     * Predicting timestamps is very imprecise, thus a range is given instead of a single timestamp, and time prediction uses down to hours.
      * @param dataSet The earthquake data set (of earthquake entries) to process.
      * @param monthlyFrequency The monthly frequency (in days) previously calculated.
      * @param meanIntermissionDurationHours The mean intermission duration (in hours) previously calculated.
@@ -305,7 +284,7 @@ public record EarthquakeReport(
             //^ Turn subjected array into stream.
             .map(EarthquakeEntry::getTime)
             //^ Maps the time component to turn record array stream into a 'ZonedDateTime' stream.
-            //^ 'EarthquakeEntry::time' lambda is short for 'entry -> entry.time()'.
+            //^ 'EarthquakeEntry::getTime' lambda is short for 'entry -> entry.time()'.
             .max(ZonedDateTime::compareTo)
             //^ Find the latest date/time from the stream using '.compareTo' as the comparator.
             //^ The comparator arg is needed as 'ZonedDateTime' instances are not comparable by default.
@@ -315,7 +294,7 @@ public record EarthquakeReport(
             //^ Assure result is an existing date/time - converting 'Optional' to 'ZonedDateTime'.
 
         ZonedDateTime prediction1 = latestOccurrence.plusHours((long) meanIntermissionDurationHours);
-        ZonedDateTime prediction2 = latestOccurrence.plusHours((long) monthlyFrequency*24);
+        ZonedDateTime prediction2 = latestOccurrence.plusHours((long) (monthlyFrequency*24));
 
         //: Making sure to return prediction range in chronological order.
         if (prediction1.isBefore(prediction2)) return new ZonedDateTime[]{ prediction1, prediction2 };
@@ -336,9 +315,16 @@ public record EarthquakeReport(
         report.append(String.format("> Magnitude - mean of %.1f with quartiles (Q1, Q2, and Q3) of %.1f Mw, %.1f Mw, and %.1f Mw.\n",
             this.meanMagnitude, this.magnitudeQuartiles[0], this.magnitudeQuartiles[1], this.magnitudeQuartiles[2]
         ));
-        report.append(String.format("> Timing - mean intermission time of %.1f hours with a monthly frequency of %.2f earthquakes per month.\n",
-            this.meanIntermissionTimeHours, this.monthlyFrequency
-        ));
+        if (this.meanIntermissionTimeHours != 0){
+            report.append(String.format("> Timing - mean intermission time of %.1f hours with a monthly frequency of %.2f earthquakes per month.\n",
+                this.meanIntermissionTimeHours, this.monthlyFrequency
+            ));
+        }
+        else {
+            report.append(String.format("> Timing - monthly frequency of %.2f earthquakes per month; mean intermission time is not applicable due to only having one filtered earthquake entry in report.\n",
+                this.monthlyFrequency
+            ));
+        }
         report.append(String.format("> Location - centroid at %.3f\u00B0 N %.3f\u00B0 E.\n",
             this.centroidCoords[0], this.centroidCoords[1]
         ));
@@ -374,5 +360,40 @@ public record EarthquakeReport(
         //^ Replaces `for (int i = 0; i < this.dataSet.length; i++) { rawDataSet.append(String.format("> Index #%d %s\n", i, dataSet[i].toString())); }`
         return rawDataSet.toString();
     }
+    /**
+     * Compares this report to another report and generates a comparison summary.
+     * <p>
+     * Compares key statistics such as filtered earthquake entry count, mean magnitude, mean depth, and monthly frequency.
+     * @param otherReport The other 'EarthquakeReport' instance to compare against.
+     * @return A string summarising the comparison between the two reports.
+     */
+    public String compareTo(EarthquakeReport otherReport) {
+        StringBuilder comparison = new StringBuilder("--- Comparison of Latest Report to Previous Report ---\n");
 
+        //: To improve readability, code are in a more compressed style than the rest of the program.
+        if (this.dataSet().length > otherReport.dataSet().length) comparison.append("> Latest report has a higher filtered earthquake entry count of ").append(this.dataSet().length).append(".\n");
+        else if (this.dataSet().length < otherReport.dataSet().length) comparison.append("> Previous report has a higher filtered earthquake entry count of ").append(otherReport.dataSet().length).append(".\n");
+        else comparison.append("> Both reports have the same filtered earthquake entry count of ").append(this.dataSet().length).append(".\n");
+        if (this.meanMagnitude() > otherReport.meanMagnitude()) comparison.append("> Latest report has a higher mean magnitude of ").append(this.roundToOneDP(this.meanMagnitude())).append(" Mw.\n");
+        else if (this.meanMagnitude() < otherReport.meanMagnitude()) comparison.append("> Previous report has a higher mean magnitude of ").append(this.roundToOneDP(otherReport.meanMagnitude())).append(" Mw.\n");
+        else comparison.append("> Both reports have the same mean magnitude of ").append(this.roundToOneDP(this.meanMagnitude())).append(" Mw.\n");
+        if (this.meanDepth() > otherReport.meanDepth()) comparison.append("> Latest report has a higher mean depth of ").append(this.roundToOneDP(this.meanDepth())).append(" Km.\n");
+        else if (this.meanDepth() < otherReport.meanDepth()) comparison.append("> Previous report has a higher mean depth of ").append(this.roundToOneDP(otherReport.meanDepth())).append(" Km.\n");
+        else comparison.append("> Both reports have the same mean depth of ").append(this.roundToOneDP(this.meanDepth())).append(" Km.\n");
+        if (this.monthlyFrequency() > otherReport.monthlyFrequency()) comparison.append("> Latest report has a higher monthly frequency of ").append(this.roundToOneDP(this.monthlyFrequency())).append(" times per month.\n");
+        else if (this.monthlyFrequency() < otherReport.monthlyFrequency()) comparison.append("> Previous report has a higher monthly frequency of ").append(this.roundToOneDP(otherReport.monthlyFrequency())).append(" times per month.\n");
+        else comparison.append("> Both reports have the same monthly frequency of ").append(this.roundToOneDP(this.monthlyFrequency())).append(" times per month.\n");
+
+        comparison.append("--- ----------------------------------------- ---\n");
+
+        return comparison.toString();
+    }
+    /**
+     * Helper method rounds a double value to one decimal place.
+     * <p>
+     * Called in 'this.compareTo' method for better readability of comparison summary.
+     * @param value The double value to round.
+     * @return The rounded double value.
+     */
+    private double roundToOneDP(double value) { return Math.round(value * 10) / 10.0; }
 }

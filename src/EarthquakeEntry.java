@@ -1,6 +1,7 @@
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 
 /**
  * Record class representing a single earthquake entry.
@@ -18,7 +19,7 @@ import java.time.ZonedDateTime;
 public record EarthquakeEntry(
     double magnitude,
     String place,
-    String time,
+    long time,
     double longitude,
     double latitude,
     double depth
@@ -65,6 +66,7 @@ public record EarthquakeEntry(
     private static void validatePlace(String place) {
         if (place == null || place.isBlank()) throw new IllegalArgumentException(place + " is invalid. Place cannot be null or blank.");
         //^ '.isBlank()' includes whitespace check.
+        if (place.length() > 512) throw new IllegalArgumentException(place + " is invalid. Place cannot have a name over 512 characters.");
     }
     /**
      * Validates arg for 'this.time' field.
@@ -73,9 +75,10 @@ public record EarthquakeEntry(
      * @throws IllegalArgumentException if 'time' is in the future or before 1900AD.
      */
     private static void validateTime(ZonedDateTime time) {
+        if (time == null) throw new IllegalArgumentException("Time cannot be null.");
         if (time.isAfter(ZonedDateTime.now())) throw new IllegalArgumentException(time + " is invalid. Entry time cannot be in the future.");
         if (time.isBefore(ZonedDateTime.of(1900, 1, 1, 0, 0, 0, 0, ZoneId.of("UTC")))) {
-            throw new IllegalArgumentException("Entry time cannot before 1900AD.");
+            throw new IllegalArgumentException("Entry time cannot be before 1900AD.");
         }
     }
     /**
@@ -106,7 +109,7 @@ public record EarthquakeEntry(
         if (depth <= 0) throw new IllegalArgumentException(depth + " is invalid. Depth cannot be negative nor zero.");
         //^ USGS API allows depths to be between -100 and 1000 km ( https://earthquake.usgs.gov/fdsnws/event/1/ );
         //^ However negatives depths are margins or errors and depths of 0 km means unable to calculate ( https://www.usgs.gov/faqs/what-does-it-mean-earthquake-occurred-a-depth-0-km-how-can-earthquake-have-a-negative-depth ).
-        if (depth > 800) throw new IllegalArgumentException(" is invalid. Depth must not be deeper than 800 kilometers.");
+        if (depth > 800) throw new IllegalArgumentException(depth + " is invalid. Depth must not be deeper than 800 kilometers.");
         //^ Deepest recorded earthquake depth is ~735.8 km - thus it is safe to assume anything deeper than 800 is invalid.
         //^ Source - https://en.wikipedia.org/wiki/Deep-focus_earthquake .
     }
@@ -122,7 +125,7 @@ public record EarthquakeEntry(
             "earthquake entry: earthquake in %s (at %.3f\u00B0 N %.3f\u00B0 E) happened at %s with a magnitude of %.1fMw hitting a depth: %.2f km)]",
             //^ String template with placeholders.
             //^ Using '\u00B0' unicode for degree symbol.
-            this.place, this.latitude, this.longitude, this.getTime(), this.magnitude, this.depth
+            this.place, this.latitude, this.longitude, this.getHumanReadableTimestamp(), this.magnitude, this.depth
             //^ Data for said placeholders.
             //^ 'this.time.toString()' is implicitly called by the '%s' placeholder.
         );
@@ -134,9 +137,9 @@ public record EarthquakeEntry(
      * @param timestamp The unix epoch timestamp, as string representation, to convert.
      * @return ZonedDateTime object representing the given timestamp.
      */
-    private static ZonedDateTime unixEpochToDateTime(String timestamp) {
+    private static ZonedDateTime unixEpochToDateTime(long timestamp) {
         //* Converts unix timestamp (as long (long int) JSON element) to 'ZonedDateTime' object.
-        Instant instant = Instant.ofEpochMilli(Long.parseLong(timestamp));
+        Instant instant = Instant.ofEpochMilli(timestamp);
         //^ Uses unix epoch oriented class ('Instant') instance for use as argument in 'ZonedDateTime.ofInstant' call.
         return ZonedDateTime.ofInstant(instant, ZoneId.of("UTC"));
     }
@@ -147,5 +150,14 @@ public record EarthquakeEntry(
     public ZonedDateTime getTime() {
         //* Getter method to retrieve 'this.time' field as 'ZonedDateTime' object.
         return EarthquakeEntry.unixEpochToDateTime(this.time);
+    }
+    /**
+     * Getter method to retrieve 'this.time' field, but as human-readable formatted string.
+     * @return Human-readable string representation of the earthquake's occurrence time.
+     */
+    private String getHumanReadableTimestamp() {
+        DateTimeFormatter humanReadableFormat = DateTimeFormatter.ofPattern("EEEE, MMMM d, yyyy HH:mm z");
+        //^ Much simpler to use premade formatting (DateTimeFormatter) than building custom one.
+        return this.getTime().format(humanReadableFormat);
     }
 }

@@ -46,7 +46,7 @@ public class JSONToRecord {
             .map(JsonElement::getAsJsonObject)
             //^ Convert each JSON element into JSON object because 'JsonElement' lacks the methods that 'JsonObject' have.
             .forEach(this::validateEarthquakeInstance);
-            //^ The actual validation call fore each earthquake instance.
+            //^ The actual validation call for each earthquake instance.
 
         JsonArray filteredJSONArr = this.filterEarthquakeInstances(JSONResponse.getAsJsonArray("features"));
         //^ Get only the earthquake instances with Moment Magnitude type.
@@ -83,27 +83,22 @@ public class JSONToRecord {
      * @throws JsonSyntaxException if encountered earthquake instance without the magnitude type field.
      */
     private JsonArray filterEarthquakeInstances(JsonArray allInstances) {
-        JsonArray filteredInstances = new JsonArray();
-
-        StreamSupport.stream(allInstances.spliterator(), false)
+        return StreamSupport.stream(allInstances.spliterator(), false)
             //^ Uses 'StreamSupport' to address JsonArray's lack of a '.stream()' method.
             .map(JsonElement::getAsJsonObject)
             .filter(instance -> {
-                /// if (!instance.has("magType")) throw new JsonSyntaxException("Server response JSON has invalid structure - not all earthquake instances have 'magType' field");
-                /// //^ Prevents 'NullPointerException' when checking 'magType' field.
                 return instance.getAsJsonObject("properties").get("magType").getAsString().startsWith("mw");
                 //^ Only want Moment Magnitude type earthquakes.
                 //^ '.startsWith' is used as there are multiple Moment Magnitude types such as 'mwc', 'mww', etc.
             })
-            .forEach(filteredInstances::add);
-        //^ Add all filtered instances into new JSON array.
-        //^ As 'JsonArray' isn't supported by streams, we cannot use '.collect(' terminal method - uses for-loop instead.
-
-        return filteredInstances;
+            .collect(JsonArray::new, JsonArray::add, (a, b) -> b.forEach(a::add));
+            //^ Collect all filtered instances into new JSON array and return it.
     }
     /**
      * Validates data structure both of the response JSON object and of its fields.
-     * //! @param JsonObject JSON object of the API response.
+     * <p>
+     * Validation is for structure only - data validity is verified in the record's ('EarthquakeEntry') constructor.
+     * @param earthquakeInstance JSON object of the API response.
      * @throws JsonSyntaxException if at least one earthquake instance has invalid structure.
      */
     private void validateEarthquakeInstance(JsonObject earthquakeInstance){
@@ -118,6 +113,13 @@ public class JSONToRecord {
         if (!(geometry.get("coordinates").isJsonArray() && geometry.getAsJsonArray("coordinates").size() == 3)) {
             throw new JsonSyntaxException("At least one of the earthquake instancies, in the response JSON, has incorrect sub-field structure - 'coordinates' field in 'geometry' is not an array of 3 elements (longitude, latitude, depth)");
         }
+        JsonArray geometryEles = geometry.getAsJsonArray("coordinates");
+        for (int i = 0; i < 3; i++) {
+            if (!geometryEles.get(i).isJsonPrimitive() || !geometryEles.get(i).getAsJsonPrimitive().isNumber()) {
+                throw new JsonSyntaxException("At least one of the earthquake instancies, in the response JSON, has incorrect sub-field structure - all 3 'coordinates' elements must be numeric");
+            }
+        }
+
 
         //: Validate 'properties' field and its sub-fields.
         JsonObject properties = earthquakeInstance.getAsJsonObject("properties");
@@ -131,6 +133,10 @@ public class JSONToRecord {
      * @return All given (from param) earthquake instances.
      */
     private EarthquakeEntry[] toRecords(JsonArray earthquakeInstances) {
+        Gson gson = new Gson();
+        //^ Required instantiation of Gson object to use its deserialization method.
+        //^ As local variable, instead of in stream, to avoid repeated instantiation for each element.
+
         return StreamSupport.stream(earthquakeInstances.spliterator(), false)
             //^ Uses 'StreamSupport' to address JsonArray's lack of a '.stream()' method.
             .map(JsonElement::getAsJsonObject)
@@ -146,8 +152,6 @@ public class JSONToRecord {
                 formattedInstanceObj.add("latitude", instanceObj.getAsJsonObject("geometry").getAsJsonArray("coordinates").get(1).getAsJsonPrimitive());
                 formattedInstanceObj.add("depth", instanceObj.getAsJsonObject("geometry").getAsJsonArray("coordinates").get(2).getAsJsonPrimitive());
 
-                Gson gson = new Gson();
-                //^ Required instantiation of Gson object to use its deserialization method.
                 return gson.fromJson(formattedInstanceObj, EarthquakeEntry.class);
                 //^ Convert (deserialize) JSON object into 'EarthquakeEntry' record.
             })
